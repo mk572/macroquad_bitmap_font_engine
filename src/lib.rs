@@ -47,7 +47,7 @@ impl BmFont {
             let line = line.trim();
             if line.is_empty() { continue; }
             let (kind, attrs) = parse_line(line);
-            match kind {
+            match kind.as_str() {
                 "common" => {
                     line_height = get_i32(&attrs, "lineHeight").map(|v| v as f32);
                     base = get_i32(&attrs, "base").map(|v| v as f32);
@@ -171,7 +171,7 @@ fn parse_page_file(text: &str) -> Result<String, String> {
     Err("BMFont has no page entry (expected a single atlas page)".into())
 }
 
-fn parse_line(line: &str) -> (&str, HashMap<String, String>) {
+fn parse_line(line: &str) -> (String, HashMap<String, String>) {
     let mut tokens = Vec::new();
     let mut token = String::new();
     let mut quoted = false;
@@ -185,7 +185,7 @@ fn parse_line(line: &str) -> (&str, HashMap<String, String>) {
         }
     }
     if !token.is_empty() { tokens.push(token); }
-    let kind = tokens.first().map(String::as_str).unwrap_or("");
+    let kind = tokens.first().cloned().unwrap_or_default();
     let mut attrs = HashMap::new();
     for item in tokens.iter().skip(1) {
         if let Some((key, value)) = item.split_once('=') {
