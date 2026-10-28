@@ -1,0 +1,12 @@
+[package]
+name = "macroquad_bitmap_font_engine"
+version = "0.1.0"
+edition = "2021"
+description = "A small AngelCode text BMFont renderer for Macroquad"
+license = "MIT"
+repository = "https://github.com/mk572/macroquad_bitmap_font_engine"
+
+[dependencies]
+macroquad = "0.4"
+
+[dev-dependencies]
