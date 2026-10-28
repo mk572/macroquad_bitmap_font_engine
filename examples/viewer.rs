@@ -2,7 +2,6 @@
 //! Uses a native file picker, so it can open .fnt files from any local folder.
 use macroquad::prelude::*;
 use macroquad_bitmap_font_engine::BmFont;
-use std::path::PathBuf;
 
 fn inside(mx: f32, my: f32, x: f32, y: f32, w: f32, h: f32) -> bool {
     mx >= x && mx <= x + w && my >= y && my <= y + h
