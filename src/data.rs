@@ -84,11 +84,98 @@ impl Align {
     }
 }
 
+/// Which copies an outline draws around the text, in font pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OutlineShape {
+    /// All eight neighbours.
+    #[default]
+    Full,
+    /// Left, right, up and down.
+    Cross,
+    /// Left, right, up, down and the lower right: the shape of the original's gold and mana
+    /// figures.
+    CrossAndLowerRight,
+}
+
+impl OutlineShape {
+    /// The offsets, in font pixels, of the copies drawn behind the text.
+    pub fn offsets(self) -> &'static [(f32, f32)] {
+        match self {
+            Self::Full => &[
+                (-1.0, -1.0),
+                (0.0, -1.0),
+                (1.0, -1.0),
+                (-1.0, 0.0),
+                (1.0, 0.0),
+                (-1.0, 1.0),
+                (0.0, 1.0),
+                (1.0, 1.0),
+            ],
+            Self::Cross => &[(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)],
+            Self::CrossAndLowerRight => {
+                &[(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (1.0, 1.0)]
+            }
+        }
+    }
+}
+
+/// The average colour of each colour set of an atlas that stacks `sets` copies of the glyph
+/// grid (RGBA bytes, `width` wide): the mean of the drawn pixels, 0 to 1. A set with no drawn
+/// pixel averages to black.
+pub fn set_averages(rgba: &[u8], width: usize, height: usize, sets: usize) -> Vec<[f32; 3]> {
+    let rows = height / sets.max(1);
+    (0..sets)
+        .map(|set| {
+            let from = set * rows * width * 4;
+            let to = (from + rows * width * 4).min(rgba.len());
+            let (mut sum, mut n) = ([0.0_f32; 3], 0.0_f32);
+            for p in rgba.get(from..to).unwrap_or(&[]).as_chunks::<4>().0.iter() {
+                if p[3] != 0 {
+                    for (acc, c) in sum.iter_mut().zip(p) {
+                        *acc += f32::from(*c) / 255.0;
+                    }
+                    n += 1.0;
+                }
+            }
+            sum.map(|v| if n > 0.0 { v / n } else { 0.0 })
+        })
+        .collect()
+}
+
+/// The set whose average colour is closest to `color` (red, green, blue, 0 to 1).
+pub fn nearest_set(averages: &[[f32; 3]], color: [f32; 3]) -> usize {
+    let distance = |a: &[f32; 3]| {
+        a.iter()
+            .zip(color)
+            .map(|(x, y)| (x - y).powi(2))
+            .sum::<f32>()
+    };
+    averages
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| distance(a).total_cmp(&distance(b)))
+        .map_or(0, |(i, _)| i)
+}
+
+/// The set with the lightest average colour: the one a flat tint multiplies.
+pub fn lightest_set(averages: &[[f32; 3]]) -> usize {
+    averages
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.iter().sum::<f32>().total_cmp(&b.iter().sum::<f32>()))
+        .map_or(0, |(i, _)| i)
+}
+
 /// A parsed single-page text BMFont: metrics, glyphs and kerning, no texture.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FontData {
     pub line_height: f32,
     pub base: f32,
+    /// The atlas size the file declares (`common scaleW`, `scaleH`), 0 when it does not say.
+    /// An atlas that stacks several colour sets is a multiple of `scale_h` tall; a texture a
+    /// multiple of `scale_w` wide is a larger drawing of the same font.
+    pub scale_w: u32,
+    pub scale_h: u32,
     /// `info padding`: up, right, down, left.
     pub padding: [i32; 4],
     /// `info spacing`: horizontal, vertical.
@@ -106,6 +193,7 @@ impl FontData {
         }
         let mut line_height = None;
         let mut base = None;
+        let mut atlas = (0, 0);
         let mut page = None;
         let mut padding = [0; 4];
         let mut spacing = [0; 2];
@@ -134,6 +222,10 @@ impl FontData {
                 "common" => {
                     line_height = Some(required("lineHeight")? as f32);
                     base = Some(required("base")? as f32);
+                    atlas = (
+                        get_i32(&attrs, "scaleW").unwrap_or(0).max(0) as u32,
+                        get_i32(&attrs, "scaleH").unwrap_or(0).max(0) as u32,
+                    );
                     if get_i32(&attrs, "pages").unwrap_or(1) > 1 {
                         return Err(FontError::Unsupported("several atlas pages"));
                     }
@@ -184,6 +276,8 @@ impl FontData {
         Ok(Self {
             line_height,
             base: base.unwrap_or(line_height),
+            scale_w: atlas.0,
+            scale_h: atlas.1,
             padding,
             spacing,
             page: page.ok_or(FontError::Missing("a page entry"))?,
@@ -411,5 +505,37 @@ kerning first=63 second=65 amount=-2
         assert_eq!(font.wrap("A\nA A", 100.0), "A\nA A");
         // A single word wider than the limit keeps its own line.
         assert_eq!(font.wrap("AAAA A", 5.0), "AAAA\nA");
+    }
+
+    #[test]
+    fn the_atlas_size_is_read() {
+        let font = font();
+        assert_eq!((font.scale_w, font.scale_h), (16, 16));
+    }
+
+    #[test]
+    fn the_original_outline_is_four_sides_and_the_lower_right() {
+        assert_eq!(OutlineShape::Full.offsets().len(), 8);
+        assert_eq!(OutlineShape::Cross.offsets().len(), 4);
+        let original = OutlineShape::CrossAndLowerRight.offsets();
+        assert_eq!(original.len(), 5);
+        assert!(original.contains(&(1.0, 1.0)) && !original.contains(&(-1.0, -1.0)));
+    }
+
+    #[test]
+    fn colour_sets_are_told_apart_by_their_average_and_lightness() {
+        // Two sets of one row of two pixels: red then a dim grey with a hole.
+        let rgba = [
+            255, 0, 0, 255, 255, 0, 0, 255, // set 0
+            100, 100, 100, 255, 0, 0, 0, 0, // set 1
+        ];
+        let averages = set_averages(&rgba, 2, 2, 2);
+        assert_eq!(averages[0], [1.0, 0.0, 0.0]);
+        assert!((averages[1][0] - 100.0 / 255.0).abs() < 1e-6);
+        assert_eq!(nearest_set(&averages, [0.9, 0.1, 0.0]), 0);
+        assert_eq!(nearest_set(&averages, [0.4, 0.4, 0.4]), 1);
+        assert_eq!(lightest_set(&averages), 1);
+        // No drawn pixel is black, never a division by zero.
+        assert_eq!(set_averages(&[0; 8], 2, 1, 1), vec![[0.0; 3]]);
     }
 }

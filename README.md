@@ -51,13 +51,26 @@ The y coordinate passed to draw_text is the **baseline**, not the top of the gly
 
 If you already loaded the atlas yourself, use BmFont::from_fnt_str(&fnt_text, texture). To embed a font in the binary, use BmFont::from_bytes(include_str!("font.fnt"), include_bytes!("font.png")). The atlas is configured to FilterMode::Nearest.
 
-Aligned, outlined text:
+Ink, outline, shadow, alignment:
 
-    use macroquad_bitmap_font_engine::{Align, TextParams};
+    use macroquad_bitmap_font_engine::{Align, Ink, Outline, OutlineShape, Shadow, TextParams};
 
-    let params = TextParams { scale: 2.0, align: Align::Center, outline: Some(BLACK), ..Default::default() };
+    let params = TextParams {
+        scale: 2.0,
+        ink: Ink::Tint(GOLD),                       // or Ink::Set(3), Ink::Nearest(RED)
+        align: Align::Center,
+        shadow: Some(Shadow { offset: vec2(1.0, 1.0), color: BLACK }),   // font pixels
+        outline: Some(Outline { color: BLACK, shape: OutlineShape::CrossAndLowerRight }),
+        ..Default::default()
+    };
     font.draw_text_ex("Centred\nlines", 160.0, 50.0, &params);
     let wrapped = font.wrap_text("A long sentence that must fit", 120.0, 2.0);
+
+**Colour sets.** An atlas may stack several copies of the glyph grid in other colours (the .fnt describes the first copy; the PNG is a whole multiple of `scaleH` tall). `Ink::Set(n)` draws set n as it is, `Ink::Nearest(colour)` the set whose average colour is closest, and `Ink::Tint(colour)` the lightest set multiplied by the colour. `colour_sets()` says how many there are; a normal font has one.
+
+**Larger atlases.** If the PNG is a whole multiple of `scaleW` wide, it is taken as the same font drawn that many times larger and the glyph rectangles are scaled to match. Metrics stay in the .fnt's pixels.
+
+Effects use the lightest set tinted with the effect's colour. Shadow offsets and outlines are in font pixels, multiplied by the scale.
 
 ## Reproducible asset workflow
 
