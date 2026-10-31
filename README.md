@@ -72,3 +72,14 @@ Run the example after adding your own font files:
 ## License
 
 The engine is MIT licensed. Font files and atlases are separate assets and retain their own licenses.
+
+
+## Desktop font viewer
+
+A small interactive viewer is included as an example. It opens a native file picker, so you can select a .fnt file from any local folder, adjust the zoom slider, edit preview text, and see measured dimensions.
+
+Run it on desktop with:
+
+    cargo run --example viewer
+
+The selected .fnt file must use AngelCode's text format, and its atlas PNG must exist at the path named in the file's page entry. The viewer does not copy or modify font files. The native file picker uses the rfd crate as a development dependency.
