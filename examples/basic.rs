@@ -19,7 +19,7 @@ async fn main() {
         );
         let size = font.measure_text("Hello, bitmap font!", 2.0);
         draw_text(
-            &format!("Measured advance: {:.0} x {:.0}", size.width, size.height),
+            format!("Measured advance: {:.0} x {:.0}", size.width, size.height),
             24.0,
             120.0,
             18.0,
