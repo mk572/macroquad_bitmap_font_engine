@@ -66,7 +66,7 @@ async fn main() {
                         error.clear();
                     }
                     Err(e) => {
-                        error = e;
+                        error = e.to_string();
                         font_path = chosen;
                         font = None;
                     }

@@ -6,8 +6,10 @@ A deliberately small AngelCode BMFont text-format renderer for Macroquad. It is 
 
 - Loads the text .fnt format and its single PNG atlas page.
 - Uses glyph rectangles, offsets, advances, baseline and pair kerning.
-- draw_text supports a uniform scale, tint and newline-separated lines.
-- measure_text returns advance width and line-box height.
+- draw_text supports a uniform scale, tint and newline-separated lines; draw_text_ex adds left/centre/right alignment, a shadow, a one-pixel outline and whole-pixel snapping (TextParams).
+- measure_text returns advance width and line-box height; wrap_text breaks text at word gaps to a pixel width.
+- Parsing and layout (the data module: FontData, Layout) need no window, so they can be unit-tested on real .fnt files. Errors are a FontError, not a String.
+- The info line's padding and spacing are read and exposed (FontData::padding, spacing); glyph advances already include them.
 - Sets the atlas to nearest-neighbour filtering for crisp pixel art.
 - No extra runtime dependencies beyond Macroquad.
 
@@ -47,7 +49,15 @@ Then:
 
 The y coordinate passed to draw_text is the **baseline**, not the top of the glyph. Scale is relative to the BMFont's original pixel size. Unknown characters use ? when that glyph exists; otherwise they are skipped.
 
-If you already loaded the atlas yourself, use BmFont::from_fnt_str(&fnt_text, texture). The atlas is configured to FilterMode::Nearest.
+If you already loaded the atlas yourself, use BmFont::from_fnt_str(&fnt_text, texture). To embed a font in the binary, use BmFont::from_bytes(include_str!("font.fnt"), include_bytes!("font.png")). The atlas is configured to FilterMode::Nearest.
+
+Aligned, outlined text:
+
+    use macroquad_bitmap_font_engine::{Align, TextParams};
+
+    let params = TextParams { scale: 2.0, align: Align::Center, outline: Some(BLACK), ..Default::default() };
+    font.draw_text_ex("Centred\nlines", 160.0, 50.0, &params);
+    let wrapped = font.wrap_text("A long sentence that must fit", 120.0, 2.0);
 
 ## Reproducible asset workflow
 
@@ -61,7 +71,7 @@ The engine deliberately does not bundle a sample font, avoiding unclear font red
 
 ## Tests and example
 
-Run parser unit tests with:
+Run the parser and layout unit tests with:
 
     cargo test
 
