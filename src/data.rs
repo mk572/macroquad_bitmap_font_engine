@@ -84,6 +84,106 @@ impl Align {
     }
 }
 
+impl Align {
+    /// The left edge of a line of `width` that is placed at `x`.
+    pub fn anchor(self, x: f32, width: f32) -> f32 {
+        x + self.shift(width)
+    }
+}
+
+/// The copies drawn behind text in the classic bitmap-font styles: a drop shadow down or up, a
+/// heavier shadow, a one-pixel outline and a heavier outline. The copies take the edge colour of
+/// [`crate::TextParams::edge`]; the offsets are in font pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Effect {
+    #[default]
+    Plain,
+    /// Three copies to the lower right.
+    Shadow,
+    /// Three copies to the upper left.
+    ShadowUp,
+    /// `Shadow` and a second ring two pixels out.
+    ShadowHeavy,
+    /// Copies on all eight sides.
+    Outline,
+    /// `Outline` and five more copies to the right, below and the lower right.
+    OutlineHeavy,
+}
+
+const DOWN: [(f32, f32); 3] = [(1.0, 1.0), (0.0, 1.0), (1.0, 0.0)];
+const UP: [(f32, f32); 3] = [(-1.0, 0.0), (-1.0, -1.0), (0.0, -1.0)];
+const SHADOW_HEAVY: [(f32, f32); 6] = [
+    (1.0, 1.0),
+    (0.0, 1.0),
+    (1.0, 0.0),
+    (2.0, 2.0),
+    (1.0, 2.0),
+    (2.0, 1.0),
+];
+const OUTLINE: [(f32, f32); 8] = [
+    (1.0, 1.0),
+    (0.0, 1.0),
+    (1.0, 0.0),
+    (-1.0, 0.0),
+    (-1.0, -1.0),
+    (0.0, -1.0),
+    (1.0, -1.0),
+    (-1.0, 1.0),
+];
+const OUTLINE_HEAVY: [(f32, f32); 13] = [
+    (1.0, 1.0),
+    (0.0, 1.0),
+    (1.0, 0.0),
+    (-1.0, 0.0),
+    (-1.0, -1.0),
+    (0.0, -1.0),
+    (2.0, 2.0),
+    (1.0, 2.0),
+    (2.0, 1.0),
+    (1.0, -1.0),
+    (-1.0, 1.0),
+    (2.0, 0.0),
+    (0.0, 2.0),
+];
+
+impl Effect {
+    /// The offsets, in font pixels, of the copies drawn behind the text.
+    pub fn offsets(self) -> &'static [(f32, f32)] {
+        match self {
+            Self::Plain => &[],
+            Self::Shadow => &DOWN,
+            Self::ShadowUp => &UP,
+            Self::ShadowHeavy => &SHADOW_HEAVY,
+            Self::Outline => &OUTLINE,
+            Self::OutlineHeavy => &OUTLINE_HEAVY,
+        }
+    }
+}
+
+/// Break `text` into lines no wider than `width`, measuring each candidate line with `measure`.
+/// A word wider than `width` stands on a line of its own.
+pub fn wrap_lines(text: &str, width: f32, measure: impl Fn(&str) -> f32) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let attempt = if line.is_empty() {
+            word.to_string()
+        } else {
+            format!("{line} {word}")
+        };
+        if !line.is_empty() && measure(&attempt) > width {
+            lines.push(std::mem::take(&mut line));
+            line = word.to_string();
+        } else {
+            line = attempt;
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 /// Which copies an outline draws around the text, in font pixels.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OutlineShape {
@@ -537,5 +637,40 @@ kerning first=63 second=65 amount=-2
         assert_eq!(lightest_set(&averages), 1);
         // No drawn pixel is black, never a division by zero.
         assert_eq!(set_averages(&[0; 8], 2, 1, 1), vec![[0.0; 3]]);
+    }
+
+    #[test]
+    fn an_alignment_anchors_a_line() {
+        assert_eq!(Align::Left.anchor(100.0, 40.0), 100.0);
+        assert_eq!(Align::Center.anchor(100.0, 40.0), 80.0);
+        assert_eq!(Align::Right.anchor(100.0, 40.0), 60.0);
+    }
+
+    #[test]
+    fn the_effects_have_their_copies() {
+        assert!(Effect::Plain.offsets().is_empty());
+        assert_eq!(Effect::Shadow.offsets().len(), 3);
+        assert!(Effect::Shadow
+            .offsets()
+            .iter()
+            .all(|&(x, y)| x >= 0.0 && y >= 0.0));
+        assert!(Effect::ShadowUp
+            .offsets()
+            .iter()
+            .all(|&(x, y)| x <= 0.0 && y <= 0.0));
+        assert_eq!(Effect::ShadowHeavy.offsets().len(), 6);
+        assert_eq!(Effect::Outline.offsets().len(), 8);
+        assert_eq!(Effect::OutlineHeavy.offsets().len(), 13);
+    }
+
+    #[test]
+    fn words_wrap_at_the_width_and_a_long_word_stands_alone() {
+        let chars = |s: &str| s.len() as f32;
+        assert_eq!(wrap_lines("aa bb cc dd", 5.0, chars), ["aa bb", "cc dd"]);
+        assert_eq!(
+            wrap_lines("a verylongword b", 5.0, chars),
+            ["a", "verylongword", "b"]
+        );
+        assert!(wrap_lines("   ", 5.0, chars).is_empty());
     }
 }
