@@ -70,6 +70,8 @@ Ink, outline, shadow, alignment:
 
 **Larger atlases.** If the PNG is a whole multiple of `scaleW` wide, it is taken as the same font drawn that many times larger and the glyph rectangles are scaled to match. Metrics stay in the .fnt's pixels.
 
+**Effects and gradient.** `TextParams::effect` (`Effect::Shadow`, `ShadowUp`, `ShadowHeavy`, `Outline`, `OutlineHeavy`) draws the classic copies behind the text in `TextParams::edge`. `Ink::Gradient { top, bottom }` tints the lightest set with a vertical gradient over each line box. `Align::anchor`, `wrap_lines` (wrapping with any measuring closure) and `mix` are window-free helpers.
+
 Effects use the lightest set tinted with the effect's colour. Shadow offsets and outlines are in font pixels, multiplied by the scale.
 
 ## Reproducible asset workflow
