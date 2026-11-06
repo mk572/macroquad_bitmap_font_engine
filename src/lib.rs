@@ -69,9 +69,13 @@ pub struct TextParams {
     pub effect: Effect,
     /// The colour of the `effect` copies.
     pub edge: Color,
-    /// A light-source reflection: the pixels of the letters whose neighbour above or to the left
-    /// is empty (the top and left edges of the strokes) are painted in this colour over the ink.
+    /// A light-source reflection: the pixels of the letters with nothing above or to the left of
+    /// them (the corners where a top edge meets a left edge) are painted in this colour over the
+    /// ink.
     pub highlight: Option<Color>,
+    /// The pixels with only an empty neighbour above, or only one to the left (the rest of the top
+    /// and left edges), in this colour; `None` for the colour of `highlight`.
+    pub highlight_edge: Option<Color>,
     /// Round glyph positions to whole screen pixels, so pixel fonts do not shimmer.
     pub snap: bool,
 }
@@ -87,6 +91,7 @@ impl Default for TextParams {
             effect: Effect::Plain,
             edge: BLACK,
             highlight: None,
+            highlight_edge: None,
             snap: true,
         }
     }
@@ -301,17 +306,23 @@ impl BmFont {
             let y = snap(top);
             for j in 0..glyph.height.max(0) {
                 for i in 0..glyph.width.max(0) {
-                    if self.solid(glyph, i, j)
-                        && (!self.solid(glyph, i - 1, j) || !self.solid(glyph, i, j - 1))
-                    {
-                        draw_rectangle(
-                            x + i as f32 * scale,
-                            y + j as f32 * scale,
-                            scale,
-                            scale,
-                            color,
-                        );
+                    if !self.solid(glyph, i, j) {
+                        continue;
                     }
+                    let (bare_left, bare_top) =
+                        (!self.solid(glyph, i - 1, j), !self.solid(glyph, i, j - 1));
+                    let paint = match (bare_left, bare_top) {
+                        (true, true) => color,
+                        (false, false) => continue,
+                        _ => params.highlight_edge.unwrap_or(color),
+                    };
+                    draw_rectangle(
+                        x + i as f32 * scale,
+                        y + j as f32 * scale,
+                        scale,
+                        scale,
+                        paint,
+                    );
                 }
             }
         }
