@@ -69,6 +69,13 @@ pub struct TextParams {
     pub effect: Effect,
     /// The colour of the `effect` copies.
     pub edge: Color,
+    /// A light-source reflection: the pixels of the letters with nothing above or to the left of
+    /// them (the corners where a top edge meets a left edge) are painted in this colour over the
+    /// ink.
+    pub highlight: Option<Color>,
+    /// The pixels with only an empty neighbour above, or only one to the left (the rest of the top
+    /// and left edges), in this colour; `None` for the colour of `highlight`.
+    pub highlight_edge: Option<Color>,
     /// Round glyph positions to whole screen pixels, so pixel fonts do not shimmer.
     pub snap: bool,
 }
@@ -83,6 +90,8 @@ impl Default for TextParams {
             outline: None,
             effect: Effect::Plain,
             edge: BLACK,
+            highlight: None,
+            highlight_edge: None,
             snap: true,
         }
     }
@@ -265,6 +274,58 @@ impl BmFont {
         }
         let paint = self.resolve(params.ink);
         self.draw_layout(&layout, origin, params, paint);
+        if let Some(color) = params.highlight {
+            self.draw_highlight(&layout, origin, params, color);
+        }
+    }
+
+    /// Whether the glyph's pixel `(i, j)` is part of the letter (`false` outside the glyph).
+    fn solid(&self, glyph: &Glyph, i: i32, j: i32) -> bool {
+        let image = self.image.get_or_init(|| self.texture.get_texture_data());
+        if i < 0 || j < 0 || i >= glyph.width || j >= glyph.height {
+            return false;
+        }
+        // The middle of the font pixel in the (maybe larger) atlas.
+        let tx = ((glyph.x + i) as f32 * self.ratio + self.ratio / 2.0) as usize;
+        let ty = ((glyph.y + j) as f32 * self.ratio + self.ratio / 2.0) as usize;
+        tx < image.width()
+            && ty < image.height()
+            && image.bytes[(ty * image.width() + tx) * 4 + 3] > 0
+    }
+
+    /// The `highlight`: the letters' top and left edge pixels, over the ink.
+    fn draw_highlight(&self, layout: &Layout, origin: Vec2, params: &TextParams, color: Color) {
+        let scale = params.scale;
+        let snap = |v: f32| if params.snap { v.round() } else { v };
+        for placed in &layout.glyphs {
+            let glyph = &placed.glyph;
+            let line_x = origin.x + params.align.shift(layout.line_widths[placed.line]) * scale;
+            let top = origin.y + placed.line as f32 * self.line_height * scale - self.base * scale
+                + glyph.y_offset as f32 * scale;
+            let x = snap(line_x + (placed.x + glyph.x_offset as f32) * scale);
+            let y = snap(top);
+            for j in 0..glyph.height.max(0) {
+                for i in 0..glyph.width.max(0) {
+                    if !self.solid(glyph, i, j) {
+                        continue;
+                    }
+                    let (bare_left, bare_top) =
+                        (!self.solid(glyph, i - 1, j), !self.solid(glyph, i, j - 1));
+                    let paint = match (bare_left, bare_top) {
+                        (true, true) => color,
+                        (false, false) => continue,
+                        _ => params.highlight_edge.unwrap_or(color),
+                    };
+                    draw_rectangle(
+                        x + i as f32 * scale,
+                        y + j as f32 * scale,
+                        scale,
+                        scale,
+                        paint,
+                    );
+                }
+            }
+        }
     }
 
     /// The effect's copies with a translucent `edge`: every pixel the copies cover is painted
