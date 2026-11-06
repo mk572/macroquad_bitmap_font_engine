@@ -674,3 +674,28 @@ kerning first=63 second=65 amount=-2
         assert!(wrap_lines("   ", 5.0, chars).is_empty());
     }
 }
+
+/// The cells (top left corners, each `size` wide) without repeats: two corners less than half a
+/// cell apart in both directions are the same cell, and the first one is kept.
+pub fn distinct_cells(cells: Vec<(f32, f32)>, size: f32) -> Vec<(f32, f32)> {
+    let mut seen = std::collections::HashSet::new();
+    let size = size.max(f32::EPSILON);
+    cells
+        .into_iter()
+        .filter(|&(x, y)| seen.insert(((x / size).round() as i64, (y / size).round() as i64)))
+        .collect()
+}
+
+#[cfg(test)]
+mod distinct_cells_tests {
+    use super::distinct_cells;
+
+    #[test]
+    fn cells_hit_by_two_copies_are_kept_once() {
+        let cells = vec![(0.0, 0.0), (8.0, 0.0), (0.0, 0.0), (8.0, 8.0), (8.4, 0.0)];
+        assert_eq!(
+            distinct_cells(cells, 8.0),
+            vec![(0.0, 0.0), (8.0, 0.0), (8.0, 8.0)]
+        );
+    }
+}
