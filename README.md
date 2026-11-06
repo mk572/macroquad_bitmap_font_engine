@@ -74,6 +74,8 @@ Ink, outline, shadow, alignment:
 
 Effects use the lightest set tinted with the effect's colour. With a translucent `edge` (alpha below 1) the copies are painted as one shape, each pixel once, so overlaps are not blended twice and the shadow takes its colour from what lies under it. Shadow offsets and outlines are in font pixels, multiplied by the scale. `TextParams::highlight` paints the letters' top-left corner pixels (nothing above or to the left) over the ink, a light-source reflection; `highlight_edge` is the colour of the rest of the top and left edges (default: the same).
 
+The settings of `TextParams` (ink, alignment, effects, shadows, outlines, the reflection highlight) are explained in [docs/text-params.md](docs/text-params.md).
+
 ## Reproducible asset workflow
 
 1. Keep the source font file and the exact BMFont exporter/version in your project's asset pipeline documentation.
