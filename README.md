@@ -72,7 +72,7 @@ Ink, outline, shadow, alignment:
 
 **Effects and gradient.** `TextParams::effect` (`Effect::Shadow`, `ShadowUp`, `ShadowHeavy`, `Outline`, `OutlineHeavy`) draws the classic copies behind the text in `TextParams::edge`. `Ink::Gradient { top, bottom }` tints the lightest set with a vertical gradient over each line box. `Align::anchor`, `wrap_lines` (wrapping with any measuring closure) and `mix` are window-free helpers.
 
-Effects use the lightest set tinted with the effect's colour. With a translucent `edge` (alpha below 1) the copies are painted as one shape, each pixel once, so overlaps are not blended twice and the shadow takes its colour from what lies under it. Shadow offsets and outlines are in font pixels, multiplied by the scale.
+Effects use the lightest set tinted with the effect's colour. With a translucent `edge` (alpha below 1) the copies are painted as one shape, each pixel once, so overlaps are not blended twice and the shadow takes its colour from what lies under it. Shadow offsets and outlines are in font pixels, multiplied by the scale. `TextParams::highlight` paints the top and left edge pixels of the letters (a light-source reflection) over the ink.
 
 ## Reproducible asset workflow
 
