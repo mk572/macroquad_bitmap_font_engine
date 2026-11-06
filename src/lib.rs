@@ -114,6 +114,8 @@ pub struct BmFont {
     /// How many colour sets the texture stacks.
     sets: usize,
     set_colours: OnceCell<SetColours>,
+    /// The atlas read back, for the pixels of the glyphs (translucent effects).
+    image: OnceCell<Image>,
     pub line_height: f32,
     pub base: f32,
 }
@@ -174,6 +176,7 @@ impl BmFont {
             ratio,
             sets,
             set_colours: OnceCell::new(),
+            image: OnceCell::new(),
         }
     }
 
@@ -242,7 +245,9 @@ impl BmFont {
         let layout = self.data.layout(text);
         let origin = vec2(x, baseline_y);
         let scale = params.scale;
-        if params.effect != Effect::Plain {
+        if params.effect != Effect::Plain && params.edge.a < 1.0 {
+            self.draw_effect_once(&layout, origin, params);
+        } else if params.effect != Effect::Plain {
             let paint = self.resolve(Ink::Tint(params.edge));
             for &(dx, dy) in params.effect.offsets() {
                 self.draw_layout(&layout, origin + vec2(dx, dy) * scale, params, paint);
@@ -260,6 +265,42 @@ impl BmFont {
         }
         let paint = self.resolve(params.ink);
         self.draw_layout(&layout, origin, params, paint);
+    }
+
+    /// The effect's copies with a translucent `edge`: every pixel the copies cover is painted
+    /// once, so where copies overlap the colour is not blended twice. The pixels come from the
+    /// atlas (any pixel of a glyph with alpha counts), drawn as squares of one font pixel.
+    fn draw_effect_once(&self, layout: &Layout, origin: Vec2, params: &TextParams) {
+        let image = self.image.get_or_init(|| self.texture.get_texture_data());
+        let (iw, ih) = (image.width(), image.height());
+        let scale = params.scale;
+        let snap = |v: f32| if params.snap { v.round() } else { v };
+        let k = self.ratio;
+        let mut cells = Vec::new();
+        for placed in &layout.glyphs {
+            let glyph = &placed.glyph;
+            let line_x = origin.x + params.align.shift(layout.line_widths[placed.line]) * scale;
+            let top = origin.y + placed.line as f32 * self.line_height * scale - self.base * scale
+                + glyph.y_offset as f32 * scale;
+            let x = snap(line_x + (placed.x + glyph.x_offset as f32) * scale);
+            let y = snap(top);
+            for j in 0..glyph.height.max(0) {
+                for i in 0..glyph.width.max(0) {
+                    // The middle of the font pixel in the (maybe larger) atlas.
+                    let tx = ((glyph.x + i) as f32 * k + k / 2.0) as usize;
+                    let ty = ((glyph.y + j) as f32 * k + k / 2.0) as usize;
+                    if tx >= iw || ty >= ih || image.bytes[(ty * iw + tx) * 4 + 3] == 0 {
+                        continue;
+                    }
+                    for &(dx, dy) in params.effect.offsets() {
+                        cells.push((x + (i as f32 + dx) * scale, y + (j as f32 + dy) * scale));
+                    }
+                }
+            }
+        }
+        for (cx, cy) in data::distinct_cells(cells, scale) {
+            draw_rectangle(cx, cy, scale, scale, params.edge);
+        }
     }
 
     fn draw_layout(
